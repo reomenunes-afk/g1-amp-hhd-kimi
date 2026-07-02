@@ -33,8 +33,11 @@ using DeviceJoint = bitbot::MujocoJoint;
 #include "Bitbot_Unitree/include/device/unitree_imu.h"
 #include "Bitbot_Unitree/include/device/unitree_joint.h"
 #include "Bitbot_Unitree/include/device/unitree_gamepad.h"
+#include "Bitbot_Unitree/include/device/unitree_camera.h"  // ← 添加这一行
 using DeviceImu = bitbot::UnitreeImu;
 using DeviceJoint = bitbot::UnitreeJoint;
+using DeviceJoint = bitbot::UnitreeJoint;
+using DeviceCamera = bitbot::UnitreeCamera;  // ← 添加这一行
 #endif
 
 
@@ -60,6 +63,7 @@ constexpr std::array<size_t, JOINT_NUMBER> JOINT_ID_MAP = {
 }; // Unitree joint mapping is the same as simulation
 constexpr size_t IMU_ID_MAP = 30; // Unitree IMU ID
 constexpr size_t ALTER_IMU_ID_MAP = 31; //unitree alter IMU ID
+constexpr size_t CAMERA_ID_MAP = 35; // Unitree Camera ID  // ← 添加这一行
 #endif
 
 /********** IMU Data Pair******************/
@@ -71,6 +75,11 @@ constexpr z::CTSPair<"AccelerationValue", Vec3> ImuAccFilteredPair;
 constexpr z::CTSPair<"AngleValue", Vec3> ImuMagFilteredPair;
 constexpr z::CTSPair<"AngleVelocityValue", Vec3> ImuGyroFilteredPair;
 constexpr z::CTSPair<"AlterAngleValue", Vec3> ImuAlterAngleFilteredPair;
+
+/********** Camera Data Pair******************/
+constexpr z::CTSPair<"DepthCenterDistance", RealNumber> DepthCenterDistPair;
+constexpr z::CTSPair<"DepthMinDistance", RealNumber> DepthMinDistPair;
+constexpr z::CTSPair<"DepthMaxDistance", RealNumber> DepthMaxDistPair;
 
 
 /********** Motor control Pair ************/
@@ -105,7 +114,7 @@ using SchedulerType = z::AbstractScheduler<ImuAccRawPair, ImuGyroRawPair, ImuMag
     TargetMotorPosPair, TargetMotorVelPair, CurrentMotorPosPair, CurrentMotorVelPair, CurrentMotorTorquePair,
     TargetMotorTorquePair, TargetMotorDampingPair, TargetMotorStiffnessPair,
     NetLastActionPair, InferenceTimePair, DanceNet1OutPair, Net1RefTrajPair, Net1RefVelPair, ImuAlterAngleFilteredPair,
-    WalkNetLastActionPair, WalkNet1OutPair, WalkInferenceTimePair, WalkNetProjectedGravityPair, WalkNetUserCommand3Pair>;
+    WalkNetLastActionPair, WalkNet1OutPair, WalkInferenceTimePair, WalkNetProjectedGravityPair, WalkNetUserCommand3Pair, DepthCenterDistPair, DepthMinDistPair, DepthMaxDistPair>;
 
 
 //define workers
@@ -118,7 +127,7 @@ using LoggerWorkerType = z::AsyncLoggerWorker<SchedulerType, RealNumber, ImuAccR
     TargetMotorPosPair, TargetMotorVelPair, CurrentMotorPosPair, CurrentMotorVelPair, CurrentMotorTorquePair,
     TargetMotorTorquePair, TargetMotorDampingPair, TargetMotorStiffnessPair,
     NetLastActionPair, InferenceTimePair, DanceNet1OutPair, Net1RefTrajPair, Net1RefVelPair, ImuAlterAngleFilteredPair,
-    WalkNetLastActionPair, WalkNet1OutPair, WalkInferenceTimePair, WalkNetProjectedGravityPair, WalkNetUserCommand3Pair>;
+    WalkNetLastActionPair, WalkNet1OutPair, WalkInferenceTimePair, WalkNetProjectedGravityPair, WalkNetUserCommand3Pair, DepthCenterDistPair, DepthMinDistPair, DepthMaxDistPair>;
 
 using CmdWorkerType = z::NetCmdWorker<SchedulerType, RealNumber, WalkNetUserCommand3Pair>;
 using ActionManagementWorkerType = z::ActionAndMotorPropertiesManagementWorker<SchedulerType, RealNumber, DanceNet1OutPair, WalkNet1OutPair>;

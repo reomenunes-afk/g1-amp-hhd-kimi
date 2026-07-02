@@ -38,11 +38,13 @@ struct UserData
     MotorResetWorkerType* MotorResetWorker;
     ActionManagementWorkerType* ActionManagementWorker;
     CmdWorkerType* WalkCmdWorker;
+    AlterImuWorkerType* CameraWorker;
     //NOTE: you don't need to delete these workers, they will be deleted by the scheduler automaticlly when the scheduler is destroyed
 
     std::array<DeviceJoint*, JOINT_NUMBER> JointsPtr;
     DeviceImu* ImuPtr;
     DeviceImu* ImuAlterPtr;
+    DeviceCamera* CameraPtr;
 };
 
 #ifdef BUILD_SIMULATION

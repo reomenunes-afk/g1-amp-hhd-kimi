@@ -26,7 +26,7 @@ namespace bitbot
 
     void UnitreeBattery::UpdateRuntimeData()
     {
-        monitor_data_[0] = this->battery.current();
+        monitor_data_[0] = static_cast<double>(this->battery.current());
         monitor_data_[1] = (this->battery.bmsvoltage()[0] + this->battery.bmsvoltage()[1]) / 2.0;
         monitor_data_[2] = this->battery.soc();
 

@@ -30,6 +30,8 @@ void Apply(Container& container, Func func)
     }
 }
 
+
+
 void ConfigFunc(const KernelBus& bus, UserData& d)
 {
     //读取json配置文件,并初始化各个worker
@@ -49,6 +51,15 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
     Apply(d.JointsPtr, [&bus](DeviceJoint** joint, size_t i)
         { *joint = bus.GetDevice<DeviceJoint>(JOINT_ID_MAP[i]).value(); });
 
+    auto camera_opt = bus.GetDevice<DeviceCamera>(CAMERA_ID_MAP);
+    if (camera_opt.has_value()) {
+        d.CameraPtr = camera_opt.value();
+        std::cout << "Camera device initialized successfully" << std::endl;
+    } else {
+        d.CameraPtr = nullptr;
+        std::cout << "Warning: Camera device not found" << std::endl;
+    }
+
     //创建调度器
     d.TaskScheduler = SchedulerType::Create(cfg_root["Scheduler"]);
 
@@ -65,14 +76,61 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
         scheduler->template SetData<"AlterAngleValue">(euler_angles);
         });
 
+    d.AlterImuWorker = d.TaskScheduler->template CreateWorker<AlterImuWorkerType>([&d](SchedulerType::Ptr scheduler) {
+    RealNumber roll = d.ImuAlterPtr->GetRoll();
+    RealNumber pitch = d.ImuAlterPtr->GetPitch();
+    RealNumber yaw = d.ImuAlterPtr->GetYaw();
+    Vec3 euler_angles = Vec3({ roll, pitch, yaw });
+    scheduler->template SetData<"AlterAngleValue">(euler_angles);
+});
+
+// 创建相机 Worker（和 AlterImuWorker 一样使用 SimpleCallbackWorker 模式）
+// std::cout << "[camera] CameraWorker created" << std::endl;
+    d.CameraWorker = d.TaskScheduler->template CreateWorker<AlterImuWorkerType>([&d](SchedulerType::Ptr scheduler) {
+    if (d.CameraPtr && d.CameraPtr->IsReady()) {
+        d.CameraPtr->UpdateFrame();
+
+        auto depth_frame_opt = d.CameraPtr->GetDepthFrame();
+        if (!depth_frame_opt.has_value()) {
+            return;
+        }
+
+        rs2::depth_frame depth_frame = depth_frame_opt.value();
+
+        float center_dist = depth_frame.get_distance(
+            d.CameraPtr->GetWidth() / 2,
+            d.CameraPtr->GetHeight() / 2);
+        scheduler->template SetData<"DepthCenterDistance">(center_dist);
+
+        float min_dist = 10.0f, max_dist = 0.0f;
+        for (int y = 0; y < d.CameraPtr->GetHeight(); y += 10) {
+            for (int x = 0; x < d.CameraPtr->GetWidth(); x += 10) {
+                float dist = depth_frame.get_distance(x, y);
+                if (dist > 0 && dist < 10.0f) {
+                    min_dist = std::min(min_dist, dist);
+                    max_dist = std::max(max_dist, dist);
+                }
+            }
+        }
+
+        scheduler->template SetData<"DepthMinDistance">(min_dist);
+        scheduler->template SetData<"DepthMaxDistance">(max_dist);
+    }
+});
+
     //创建主任务列表，并添加worker
     d.TaskScheduler->CreateTaskList("MainTask", 1, true);
     d.TaskScheduler->AddWorkers("MainTask",
         {
             d.ImuWorker,
             d.AlterImuWorker,
-            d.MotorWorker
+            d.MotorWorker,
         });
+
+    // 相机任务单独运行，避免阻塞主控制任务
+    // 500Hz 主循环下，17 大约对应 29.4Hz
+    d.TaskScheduler->CreateTaskList("CameraTask", 17);
+    d.TaskScheduler->AddWorker("CameraTask", d.CameraWorker);
 
     //创建推理任务列表，并添加worker，设置推理任务频率
     d.DanceNetInferWorker = d.TaskScheduler->template CreateWorker<BeyondMimicUnitreeInferWorkerType>(cfg_workers["DanceNet1"], cfg_workers["DanceNet1"], JOINT_ID_MAP);

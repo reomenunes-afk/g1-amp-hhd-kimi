@@ -18,6 +18,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(unitree_sdk2)
 
 find_package(unitree_sdk2 REQUIRED)
+find_package(realsense2 REQUIRED)
 
 message("BUILDING BITBOT UNITREE")
 message("MAKE BITBOT EVERY WHERE!")
@@ -55,4 +56,5 @@ target_include_directories(bitbotUnitree PUBLIC
 target_link_libraries(bitbotUnitree 
     BitbotKernel
     unitree_sdk2
+    realsense2
 )

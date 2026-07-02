@@ -6,6 +6,7 @@
 #include "device/unitree_robot.h"
 #include "device/unitree_battery.h"
 #include "device/unitree_gamepad.h"
+#include "device/unitree_camera.h"
 #include "bitbot_kernel/bus/bus_manager.hpp"
 
 #include "unitree/robot/channel/channel_publisher.hpp"
@@ -81,6 +82,7 @@ namespace bitbot {
     UnitreeDevice* motherboard_device_ = nullptr;
     UnitreeDevice* battery_device_ = nullptr;
     UnitreeDevice* gamepad_device_ = nullptr;
+    UnitreeDevice* camera_device_ = nullptr;  // ← 添加这一行
 
   private: //LowCmd config
     uint8_t mode_pr_;

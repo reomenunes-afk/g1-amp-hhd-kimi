@@ -26,6 +26,6 @@ namespace bitbot
 
     void UnitreeMotherboard::UpdateRuntimeData()
     {
-        monitor_data_[0] = this->Motherboard.temperature()[0];
+        monitor_data_[0] = static_cast<double>(this->Motherboard.temperature()[0]);
     }
 };

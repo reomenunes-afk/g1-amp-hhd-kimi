@@ -200,7 +200,7 @@
       },
       "Network": {
         //"ModelPath": "../../CheckPoints/policy_102.onnx",
-        "ModelPath": "../../CheckPoints/policy_gangnam.onnx",
+        "ModelPath": "/home/unitree/Documents/bitbot-unitree/CheckPoints/policy_gangnam.onnx",
         //"ModelPath": "../../CheckPoints/policy_kuailechongbai.onnx",
         "InputNodeNames": [
           "obs"

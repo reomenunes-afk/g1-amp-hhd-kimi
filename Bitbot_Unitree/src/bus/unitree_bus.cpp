@@ -5,6 +5,7 @@
 
 namespace bitbot {
 	UnitreeBus::UnitreeBus() {
+		RegisterDevices();
 	}
 
 	UnitreeBus::~UnitreeBus() {
@@ -148,6 +149,18 @@ namespace bitbot {
 					throw std::runtime_error("UnitreeBus Init error: duplicate gamepad device in configuration.");
 				}
 			}
+			else if (dev->Type() == (uint32_t)UnitreeDeviceType::UNITREE_CAMERA)
+			{
+				if (this->camera_device_ == nullptr)
+				{
+					this->camera_device_ = dev;
+				}
+				else
+				{
+					this->logger_->error("UnitreeBus Init error: duplicate camera device in configuration.");
+					throw std::runtime_error("UnitreeBus Init error: duplicate camera device in configuration.");
+				}
+			}
 			else
 			{
 				this->logger_->error("unknown device type with typeid={}, ignore now.", dev->Type());
@@ -187,12 +200,13 @@ namespace bitbot {
 	}
 
 	void UnitreeBus::RegisterDevices() {
-		static DeviceRegistrar<UnitreeDevice, UnitreeJoint> UNITREE_JOINT((uint32_t)UnitreeDeviceType::UNITREE_JOINT, "UnitreeJoint");
-		static DeviceRegistrar<UnitreeDevice, UnitreeImu> UNITREE_IMU((uint32_t)UnitreeDeviceType::UNITREE_IMU, "UnitreeImu");
-		static DeviceRegistrar<UnitreeDevice, UnitreeMotherboard> UnitreeMotherboard((uint32_t)UnitreeDeviceType::UNITREE_MOTHERBOARD, "UnitreeMotherboard");
-		static DeviceRegistrar<UnitreeDevice, UnitreeBattery> UnitreeBattery((uint32_t)UnitreeDeviceType::UNITREE_BATTERY, "UnitreeBattery");
-		static DeviceRegistrar<UnitreeDevice, UnitreeGamepad> UnitreeGamepad((uint32_t)UnitreeDeviceType::UNITREE_GAMEPAD, "UnitreeGamepad");
-	}
+    static DeviceRegistrar<UnitreeDevice, UnitreeJoint> UNITREE_JOINT((uint32_t)UnitreeDeviceType::UNITREE_JOINT, "UnitreeJoint");
+    static DeviceRegistrar<UnitreeDevice, UnitreeImu> UNITREE_IMU((uint32_t)UnitreeDeviceType::UNITREE_IMU, "UnitreeImu");
+    static DeviceRegistrar<UnitreeDevice, UnitreeMotherboard> UNITREE_MOTHERBOARD((uint32_t)UnitreeDeviceType::UNITREE_MOTHERBOARD, "UnitreeMotherboard");
+    static DeviceRegistrar<UnitreeDevice, UnitreeBattery> UNITREE_BATTERY((uint32_t)UnitreeDeviceType::UNITREE_BATTERY, "UnitreeBattery");
+    static DeviceRegistrar<UnitreeDevice, UnitreeGamepad> UNITREE_GAMEPAD((uint32_t)UnitreeDeviceType::UNITREE_GAMEPAD, "UnitreeGamepad");
+    static DeviceRegistrar<UnitreeDevice, UnitreeCamera> UNITREE_CAMERA((uint32_t)UnitreeDeviceType::UNITREE_CAMERA, "UnitreeCamera");
+}
 
 	void UnitreeBus::WriteBus() {
 		this->motor_cmd_lock_.lock();

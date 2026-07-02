@@ -39,5 +39,6 @@
         <device id="32" type="UnitreeBattery" name="battery"/>
         <device id="33" type="UnitreeMotherboard" name="mothorboard"/>
         <device id="34" type="UnitreeGamepad" name="unitree_gamepad" dead_zone="0.01" smooth="0.03"/>
+        <device id="35" type="UnitreeCamera" name="depth_camera" width="640" height="480" fps="30"/>
     </bus>
 </bitbot>
