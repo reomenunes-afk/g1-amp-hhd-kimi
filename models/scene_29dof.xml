@@ -3,7 +3,7 @@
 
   <statistic center="0 0 0.5" extent="2.0"/>
 
-  <option timestep="0.002" integrator="Euler">
+  <option timestep="0.002" integrator="implicitfast">
     <flag sensornoise="enable" />
   </option>
 
@@ -22,6 +22,6 @@
 
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
-    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="1.0 0.005 0.0001"/>
   </worldbody>
 </mujoco>

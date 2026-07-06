@@ -45,6 +45,31 @@ struct UserData
     DeviceImu* ImuPtr;
     DeviceImu* ImuAlterPtr;
     DeviceCamera* CameraPtr;
+      bool AutoDebugEnabled = false;
+      bool AutoDebugBusPrimed = false;
+      bool AutoDebugStarted = false;
+      bool AutoDebugUseReset = true;
+      bool AutoDebugResetActive = false;
+      bool AutoDebugPolicyActive = false;
+    bool AutoDebugPolicySwitchDone = false;
+    size_t AutoDebugWaitSteps = 0;
+    size_t AutoDebugResetSteps = 0;
+      size_t AutoDebugDelaySteps = 0;
+    size_t AutoDebugDepthWarmupFrames = 0;
+    size_t AutoDebugCameraFrames = 0;
+    size_t AutoDebugDepthHistorySize = 0;
+    bool AutoDebugDepthReady = false;
+    RealNumber AutoDebugDepthMin = 0;
+    RealNumber AutoDebugDepthMax = 0;
+    RealNumber AutoDebugDepthMean = 0;
+    bool SimDiagnosticsEnabled = false;
+
+#ifdef BUILD_SIMULATION
+    // Optional MuJoCo diagnostics (valid only in simulation builds).
+    mjData* MujocoData = nullptr;
+    const mjModel* MujocoModel = nullptr;
+    int PelvisBodyId = -1;
+#endif
 };
 
 #ifdef BUILD_SIMULATION

@@ -1,0 +1,95 @@
+# Standalone MuJoCo sim2sim config for the InstinctLab G1 parkour policy.
+# This mirrors /home/bytedance/Documents/20260629_172947/params/env.yaml.
+
+paths:
+  xml: "../../models/g1_29dof_stairs_sim2sim.xml"
+  raycaster_plugin: "../../build/bin/mujoco_plugin/libsensor_raycaster.so"
+  actor_onnx: "../../CheckPoints/version_policy/actor.onnx"
+  depth_encoder_onnx: "../../CheckPoints/version_policy/0-depth_encoder.onnx"
+  log_dir: "../../log/mujoco_sim2sim"
+
+simulation:
+  # MuJoCo integration dt. InstinctLab used dt=0.005 and decimation=4, so
+  # policy_dt remains 0.02. A smaller MuJoCo dt is acceptable if decimation
+  # preserves the policy interval.
+  dt: 0.002
+  control_decimation: 10
+  duration: 60.0
+  headless: false
+  show_depth: false
+  record_video: false
+  video_path: "../../log/mujoco_sim2sim/g1_parkour_mujoco.mp4"
+  video_width: 640
+  video_height: 360
+  video_fps: 50
+  video_camera:
+    mode: "tracking"
+    body: "torso_link"
+    distance: 3.0
+    azimuth: 135.0
+    elevation: -18.0
+    lookat_offset: [0.5, 0.0, 0.2]
+
+command:
+  # play_stair fixed forward velocity.
+  default: [0.6, 0.0, 0.0]
+
+policy:
+  action_clip: 100.0
+  observation_clip: 100.0
+  proprio_history: 8
+  depth_history: 8
+  depth_history_skip_frames: 5
+  # Warmup fills all history buffers before using the policy output. This is
+  # closer to IsaacLab's delayed camera history than immediate policy takeover.
+  warmup_policy_steps: 40
+
+depth:
+  camera_name: "depth_cam"
+  render_width: 64
+  render_height: 36
+  output_width: 32
+  output_height: 18
+  crop_region: [18, 0, 16, 16]  # top, bottom, left, right
+  depth_range: [0.0, 2.5]
+  gaussian_blur: true
+  flip_horizontal: true
+
+robot:
+  root_height: 0.9
+  base_body_name: "torso_link"
+  gravity_body_frame: true
+  # Set this only if runtime evidence proves a yaw convention mismatch.
+  imu_yaw_correction_rad: 0.0
+
+  # Training default joint pose in training joint order.
+  default_joint_pos:
+    left_shoulder_pitch_joint: 0.2
+    right_shoulder_pitch_joint: 0.2
+    waist_pitch_joint: 0.0
+    left_shoulder_roll_joint: 0.2
+    right_shoulder_roll_joint: -0.2
+    waist_roll_joint: 0.0
+    left_shoulder_yaw_joint: 0.0
+    right_shoulder_yaw_joint: 0.0
+    waist_yaw_joint: 0.0
+    left_elbow_joint: 0.6
+    right_elbow_joint: 0.6
+    left_hip_pitch_joint: -0.312
+    right_hip_pitch_joint: -0.312
+    left_wrist_roll_joint: 0.0
+    right_wrist_roll_joint: 0.0
+    left_hip_roll_joint: 0.0
+    right_hip_roll_joint: 0.0
+    left_wrist_pitch_joint: 0.0
+    right_wrist_pitch_joint: 0.0
+    left_hip_yaw_joint: 0.0
+    right_hip_yaw_joint: 0.0
+    left_wrist_yaw_joint: 0.0
+    right_wrist_yaw_joint: 0.0
+    left_knee_joint: 0.669
+    right_knee_joint: 0.669
+    left_ankle_pitch_joint: -0.363
+    right_ankle_pitch_joint: -0.363
+    left_ankle_roll_joint: 0.0
+    right_ankle_roll_joint: 0.0

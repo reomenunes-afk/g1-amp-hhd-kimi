@@ -30,15 +30,9 @@ std::optional<bitbot::StateId> EventPolicyRunFunc(bitbot::EventValue value, User
         std::cout << "policy run\n";
         d.MotorResetWorker->StopReset(); //停止复位
         d.TaskScheduler->DisableTaskList("ResetTask"); //在复位任务列表中禁用复位任务
-        d.ActionManagementWorker->template SwitchTo<WalkNet1OutPair>();
+        d.ActionManagementWorker->SwitchTo("WalkNet1Action", 0.0f);
         d.TaskScheduler->EnableTaskList("InferWalkTask"); //在推理任务列表中启用推理任务
-        d.TaskScheduler->EnableTaskList("DanceInferTask"); //在推理任务列表中启用推理任务
-
-        d.TaskScheduler->CreateTimedCallback([](SchedulerType::Ptr scheduler) {
-            std::cout << "DanceTaskList is stopped." << std::endl;
-            scheduler->DisableTaskList("DanceInferTask");
-            }, 3.0 / d.TaskScheduler->getSpinOnceTime());
-
+        d.TaskScheduler->DisableTaskList("DanceInferTask");
         return static_cast<bitbot::StateId>(States::StatePolicyRun);
     }
     return std::optional<bitbot::StateId>();
@@ -60,7 +54,6 @@ std::optional<bitbot::StateId> EventPolicyDanceFunc(bitbot::EventValue value, Us
             std::cout << "WalkTask is stopped." << std::endl;
             scheduler->DisableTaskList("InferWalkTask");
             }, 3.0 / d.TaskScheduler->getSpinOnceTime());
-
         return static_cast<bitbot::StateId>(States::StatePolicyDance);
     }
     return std::optional<bitbot::StateId>();

@@ -129,16 +129,12 @@
       "kb_key": "GAMEPAD_JOYSTICK_RY"
     },
     {
+      "event": "gamepad_y_move",
+      "kb_key": "GAMEPAD_JOYSTICK_LX"
+    },
+    {
       "event": "gamepad_yaw_move",
       "kb_key": "GAMEPAD_JOYSTICK_RX"
-    },
-    {
-      "event": "gamepad_pitch_move",
-      "kb_key": "GAMEPAD_JOYSTICK_LY"
-    },
-    {
-      "event": "gamepad_roll_move",
-      "kb_key": "GAMEPAD_JOYSTICK_LX"
     }
   ]
 }

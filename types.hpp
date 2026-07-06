@@ -22,22 +22,26 @@
 #include "Workers/ActionManagementWorker.hpp"
 #include "Workers/NN/BeyondMimicWorker.hpp"
 #include "Workers/NN/UnitreeRlLabVelocityInferenceWorker.hpp"
+#include "Workers/NN/UnitreeRlVersionInferenceWoker.hpp"
 #include "Workers/MITMotorControlWorker.hpp"
 
 #ifdef BUILD_SIMULATION
 #include "bitbot_mujoco/device/mujoco_imu.h"
 #include "bitbot_mujoco/device/mujoco_joint.h"
+#include "mujoco_camera.h"
 using DeviceImu = bitbot::MujocoImu;
 using DeviceJoint = bitbot::MujocoJoint;
+using DeviceCamera = bitbot::MujocoCamera;
+using DepthFrameType = bitbot::MujocoDepthFrame;
 #else
 #include "Bitbot_Unitree/include/device/unitree_imu.h"
 #include "Bitbot_Unitree/include/device/unitree_joint.h"
 #include "Bitbot_Unitree/include/device/unitree_gamepad.h"
 #include "Bitbot_Unitree/include/device/unitree_camera.h"  // ← 添加这一行
 using DeviceImu = bitbot::UnitreeImu;
-using DeviceJoint = bitbot::UnitreeJoint;
-using DeviceJoint = bitbot::UnitreeJoint;
-using DeviceCamera = bitbot::UnitreeCamera;  // ← 添加这一行
+  using DeviceJoint = bitbot::UnitreeJoint;
+  using DeviceCamera = bitbot::UnitreeCamera;
+using DepthFrameType = rs2::depth_frame;
 #endif
 
 
@@ -46,24 +50,28 @@ using DeviceCamera = bitbot::UnitreeCamera;  // ← 添加这一行
 using RealNumber = float;
 constexpr size_t JOINT_NUMBER = 29;
 using Vec3 = z::math::Vector<RealNumber, 3>;
+using Vec9 = z::math::Vector<RealNumber, 9>;
 using MotorVec = z::math::Vector<RealNumber, JOINT_NUMBER>;
 //constexpr size_t DANCE_TRAJECTORY_LENGTH = 1749; //NOTE: remember to change this when changing dancing trajectories dance 102
 constexpr size_t DANCE_TRAJECTORY_LENGTH = 1942; //NOTE: remember to change this when changing dancing trajectories gannam style
 //constexpr size_t DANCE_TRAJECTORY_LENGTH = 2897; //NOTE: remember to change this when changing dancing trajectories kuailechongbai
 
 #ifdef BUILD_SIMULATION
+// The regenerated MuJoCo model declares joints in the same order as the
+// MotorVec/device-bus ordering (left leg, right leg, waist, left arm, right arm).
 constexpr std::array<size_t, JOINT_NUMBER> JOINT_ID_MAP = {
-    0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28
 };
 constexpr size_t IMU_ID_MAP = 29;
 constexpr size_t ALTER_IMU_ID_MAP = 30;
+constexpr size_t CAMERA_ID_MAP = 35;
 #else
 constexpr std::array<size_t, JOINT_NUMBER> JOINT_ID_MAP = {
     0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28
 }; // Unitree joint mapping is the same as simulation
 constexpr size_t IMU_ID_MAP = 30; // Unitree IMU ID
 constexpr size_t ALTER_IMU_ID_MAP = 31; //unitree alter IMU ID
-constexpr size_t CAMERA_ID_MAP = 35; // Unitree Camera ID  // ← 添加这一行
+constexpr size_t CAMERA_ID_MAP = 35; // Unitree Camera ID
 #endif
 
 /********** IMU Data Pair******************/
@@ -75,11 +83,20 @@ constexpr z::CTSPair<"AccelerationValue", Vec3> ImuAccFilteredPair;
 constexpr z::CTSPair<"AngleValue", Vec3> ImuMagFilteredPair;
 constexpr z::CTSPair<"AngleVelocityValue", Vec3> ImuGyroFilteredPair;
 constexpr z::CTSPair<"AlterAngleValue", Vec3> ImuAlterAngleFilteredPair;
+constexpr z::CTSPair<"AlterAngleVelocityValue", Vec3> ImuAlterGyroFilteredPair;
+constexpr z::CTSPair<"RotationMatrixValue", Vec9> ImuRotMatPair;
+constexpr z::CTSPair<"AlterRotationMatrixValue", Vec9> ImuAlterRotMatPair;
+constexpr z::CTSPair<"MujocoRootAngVelValue", Vec3> MujocoRootAngVelPair;
 
 /********** Camera Data Pair******************/
 constexpr z::CTSPair<"DepthCenterDistance", RealNumber> DepthCenterDistPair;
 constexpr z::CTSPair<"DepthMinDistance", RealNumber> DepthMinDistPair;
 constexpr z::CTSPair<"DepthMaxDistance", RealNumber> DepthMaxDistPair;
+constexpr size_t PARKOUR_DEPTH_HISTORY = 8;
+constexpr size_t PARKOUR_DEPTH_HEIGHT = 18;
+constexpr size_t PARKOUR_DEPTH_WIDTH = 32;
+using ParkourDepthImageVec = z::math::Vector<RealNumber, PARKOUR_DEPTH_HISTORY * PARKOUR_DEPTH_HEIGHT * PARKOUR_DEPTH_WIDTH>;
+constexpr z::CTSPair<"ParkourDepthImage", ParkourDepthImageVec> ParkourDepthImagePair;
 
 
 /********** Motor control Pair ************/
@@ -111,10 +128,12 @@ constexpr z::CTSPair<z::concat(WalkNetName, "NetUserCommand3"), Vec3> WalkNetUse
 // define scheduler
 using SchedulerType = z::AbstractScheduler<ImuAccRawPair, ImuGyroRawPair, ImuMagRawPair,
     ImuAccFilteredPair, ImuGyroFilteredPair, ImuMagFilteredPair,
+    ImuRotMatPair, ImuAlterRotMatPair, MujocoRootAngVelPair,
     TargetMotorPosPair, TargetMotorVelPair, CurrentMotorPosPair, CurrentMotorVelPair, CurrentMotorTorquePair,
     TargetMotorTorquePair, TargetMotorDampingPair, TargetMotorStiffnessPair,
-    NetLastActionPair, InferenceTimePair, DanceNet1OutPair, Net1RefTrajPair, Net1RefVelPair, ImuAlterAngleFilteredPair,
-    WalkNetLastActionPair, WalkNet1OutPair, WalkInferenceTimePair, WalkNetProjectedGravityPair, WalkNetUserCommand3Pair, DepthCenterDistPair, DepthMinDistPair, DepthMaxDistPair>;
+    NetLastActionPair, InferenceTimePair, DanceNet1OutPair, Net1RefTrajPair, Net1RefVelPair, ImuAlterAngleFilteredPair, ImuAlterGyroFilteredPair,
+    WalkNetLastActionPair, WalkNet1OutPair, WalkInferenceTimePair, WalkNetProjectedGravityPair, WalkNetUserCommand3Pair,
+    DepthCenterDistPair, DepthMinDistPair, DepthMaxDistPair, ParkourDepthImagePair>;
 
 
 //define workers
@@ -134,5 +153,4 @@ using ActionManagementWorkerType = z::ActionAndMotorPropertiesManagementWorker<S
 
 /******define actor net************/
 using BeyondMimicUnitreeInferWorkerType = z::BeyondMimicUnitreeInferenceWorker<SchedulerType, Net1Name, RealNumber, JOINT_NUMBER, DANCE_TRAJECTORY_LENGTH>;
-using UnitreeRlLabVelocityInferWorkerType = z::UnitreeRlLabVelocityInferenceWorker<SchedulerType, WalkNetName, RealNumber, 5, JOINT_NUMBER>; // stack 5 frames of history
-
+using UnitreeRlLabVelocityInferWorkerType = z::UnitreeRlVersionInferenceWorker<SchedulerType, WalkNetName, RealNumber, 8, JOINT_NUMBER>; // parkour version policy, stack 8 frames of proprioception history

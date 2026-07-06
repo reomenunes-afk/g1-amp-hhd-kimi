@@ -1,0 +1,36 @@
+# Parameters for recording Gemini 336L RGB-D data for ORB-SLAM3.
+# This file is consumed by orbbec_camera gemini_330_series.launch.py.
+
+depth_registration: true
+enable_color: true
+enable_depth: true
+enable_left_ir: false
+enable_right_ir: false
+enable_point_cloud: false
+enable_colored_point_cloud: false
+
+color_width: 640
+color_height: 480
+color_fps: 30
+color_format: "YUYV"
+depth_width: 640
+depth_height: 480
+depth_fps: 30
+depth_format: "Y16"
+
+enable_frame_sync: true
+frame_aggregate_mode: "ANY"
+time_domain: "global"
+enable_sync_host_time: false
+use_hardware_time: true
+
+device_preset: "High Accuracy"
+enable_ldp: true
+enable_laser: true
+enable_soft_filter: true
+enable_noise_removal_filter: true
+enable_3d_reconstruction_mode: false
+
+enable_color_auto_exposure: true
+enable_color_auto_white_balance: true
+enable_ir_auto_exposure: true

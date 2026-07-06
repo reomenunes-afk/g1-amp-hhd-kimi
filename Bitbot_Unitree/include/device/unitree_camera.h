@@ -29,6 +29,7 @@ namespace bitbot {
     bool IsReady() const { return initialized_; }
     int GetWidth() const { return static_cast<int>(width_); }
     int GetHeight() const { return static_cast<int>(height_); }
+      float GetFps() const { return static_cast<float>(fps_); }
     float GetDepthScale() const { return depth_scale_; }
 
     void UpdateFrame();

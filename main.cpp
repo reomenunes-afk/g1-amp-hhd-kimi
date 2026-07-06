@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.cpp
  * @author zishun zhou (zhouzishun@mail.zzshub.cn)
  * @brief

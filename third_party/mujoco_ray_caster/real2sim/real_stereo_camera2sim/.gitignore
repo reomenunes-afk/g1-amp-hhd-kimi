@@ -1,0 +1,12 @@
+build/
+bin/
+datasets/*
+!datasets/.gitkeep
+recordings/*
+!recordings/.gitkeep
+third_party/
+.runtime_libs/
+__pycache__/
+*.pyc
+MUJOCO_LOG.TXT
+*_render_clean_cpp.xml

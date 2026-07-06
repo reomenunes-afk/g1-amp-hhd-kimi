@@ -97,7 +97,9 @@ namespace z
             this->Scales_lin_vel = ValVec3::ones() * scales_lin_vel;
             this->Scales_ang_vel = ValVec3::ones() * scales_ang_vel;
             this->Scales_project_gravity = ValVec3::ones() * scales_project_gravity;
-            this->Scales_command3 = { scales_lin_vel,scales_lin_vel ,scales_ang_vel };
+            // InstinctLab parkour env.yaml does not scale velocity_commands (scale=null).
+            // Do not reuse the unused base lin_vel scale here, otherwise x/y commands are zeroed.
+            this->Scales_command3 = ValVec3::ones();
             this->Scales_dof_pos = MotorValVec::ones() * scales_dof_pos;
             this->Scales_dof_vel = MotorValVec::ones() * scales_dof_vel;
             this->Scales_last_action = MotorValVec::ones();
