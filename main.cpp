@@ -63,12 +63,17 @@ int main(int argc, char const* argv[])
         &StateWaitingFunc,
         { static_cast<bitbot::EventId>(Events::EventSystemTest), (Events::EventInitPose) });
 
-    kernel.RegisterState("SystemTest", static_cast<bitbot::StateId>(States::StateSystemTest), &StateSystemTestFunc, {});
+    kernel.RegisterState("SystemTest",
+        static_cast<bitbot::StateId>(States::StateSystemTest),
+        &StateSystemTestFunc,
+        { static_cast<bitbot::EventId>(Events::EventInitPose), static_cast<bitbot::EventId>(Events::EventSystemTest) });
 
     kernel.RegisterState("init_pose",
         static_cast<bitbot::StateId>(States::StateInitPose),
         &StateInitPoseFunc,
-        { (Events::EventPolicyRun),(Events::EventPolicyDance) });
+        { static_cast<bitbot::EventId>(Events::EventPolicyRun),
+          static_cast<bitbot::EventId>(Events::EventPolicyDance),
+          static_cast<bitbot::EventId>(Events::EventSystemTest) });
 
 
     std::vector<bitbot::EventId> PolicyRunEvents;

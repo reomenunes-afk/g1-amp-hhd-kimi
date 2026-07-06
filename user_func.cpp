@@ -67,6 +67,25 @@ void PrintVecHead(const char* name, const Vec& values, size_t count)
     std::cout << "]";
 }
 
+constexpr std::array<const char*, JOINT_NUMBER> kDeviceOrderJointNames = {
+    "left_hip_pitch", "left_hip_roll", "left_hip_yaw", "left_knee", "left_ankle_pitch", "left_ankle_roll",
+    "right_hip_pitch", "right_hip_roll", "right_hip_yaw", "right_knee", "right_ankle_pitch", "right_ankle_roll",
+    "waist_yaw", "waist_roll", "waist_pitch",
+    "left_shoulder_pitch", "left_shoulder_roll", "left_shoulder_yaw", "left_elbow", "left_wrist_roll", "left_wrist_pitch", "left_wrist_yaw",
+    "right_shoulder_pitch", "right_shoulder_roll", "right_shoulder_yaw", "right_elbow", "right_wrist_roll", "right_wrist_pitch", "right_wrist_yaw"
+};
+
+RealNumber SystemTestAmplitude(size_t joint_idx)
+{
+    if (joint_idx < 12) {
+        return static_cast<RealNumber>(0.06);
+    }
+    if (joint_idx < 15) {
+        return static_cast<RealNumber>(0.05);
+    }
+    return static_cast<RealNumber>(0.10);
+}
+
 #ifdef BUILD_SIMULATION
 void ResetMujocoFreeJointLikePythonRunner(const mjModel* model, mjData* data)
 {
@@ -125,33 +144,6 @@ void Apply(Container& container, Func func)
 }
 
 #ifdef BUILD_SIMULATION
-void OverrideMujocoMotorPropertiesToDeviceOrder(nlohmann::json& cfg_workers)
-{
-    static const std::array<double, JOINT_NUMBER> kDeviceOrderKp = {
-        40.1792384714, 99.0984277767, 40.1792384714, 99.0984277767, 28.5012461957, 28.5012461957,
-        40.1792384714, 99.0984277767, 40.1792384714, 99.0984277767, 28.5012461957, 28.5012461957,
-        40.1792384714, 28.5012461957, 28.5012461957,
-        14.2506230979, 14.2506230979, 14.2506230979, 14.2506230979, 14.2506230979, 16.7783274809, 16.7783274809,
-        14.2506230979, 14.2506230979, 14.2506230979, 14.2506230979, 14.2506230979, 16.7783274809, 16.7783274809
-    };
-    static const std::array<double, JOINT_NUMBER> kDeviceOrderKd = {
-        2.5578897650, 6.3088018535, 2.5578897650, 6.3088018535, 1.8144456866, 1.8144456866,
-        2.5578897650, 6.3088018535, 2.5578897650, 6.3088018535, 1.8144456866, 1.8144456866,
-        2.5578897650, 1.8144456866, 1.8144456866,
-        0.9072228433, 0.9072228433, 0.9072228433, 0.9072228433, 0.9072228433, 1.0681415022, 1.0681415022,
-        0.9072228433, 0.9072228433, 0.9072228433, 0.9072228433, 0.9072228433, 1.0681415022, 1.0681415022
-    };
-
-    if (!cfg_workers.contains("ActionManager") || !cfg_workers["ActionManager"].contains("MotorProperties")) {
-        return;
-    }
-    for (auto& property : cfg_workers["ActionManager"]["MotorProperties"]) {
-        property["Stiffness"] = kDeviceOrderKp;
-        property["Damping"] = kDeviceOrderKd;
-    }
-    std::cout << "[Config] MuJoCo ActionManager motor properties overridden to device order" << std::endl;
-}
-
 void ApplyMujocoRuntimeOverrides(nlohmann::json& cfg_root, nlohmann::json& cfg_workers)
 {
     if (!cfg_root.contains("AutoDebug")) {
@@ -188,7 +180,6 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
     ApplyMujocoRuntimeOverrides(cfg_root, cfg_workers);
     d.AutoDebugEnabled = cfg_root.contains("AutoDebug") && cfg_root["AutoDebug"].value("Enable", false);
     d.SimDiagnosticsEnabled = d.AutoDebugEnabled || cfg_root.value("Diagnostics", nlohmann::json::object()).value("Enable", false);
-    OverrideMujocoMotorPropertiesToDeviceOrder(cfg_workers);
 #endif
 
     bool flip_depth_horizontal = false;
@@ -634,9 +625,78 @@ void StateWaitingFunc(const bitbot::KernelInterface& kernel,
 }
 
 void StateSystemTestFunc(const bitbot::KernelInterface& kernel,
-    bitbot::ExtraData& extra_data, UserData& user_data)
+    bitbot::ExtraData& extra_data, UserData& d)
 {
-    //bitbot测试状态为空，用户可自行添加
+    constexpr RealNumber kPi = static_cast<RealNumber>(3.14159265358979323846);
+    constexpr RealNumber kJointSegmentSeconds = static_cast<RealNumber>(2.0);
+    constexpr RealNumber kInitialHoldSeconds = static_cast<RealNumber>(1.0);
+
+    if (!d.SystemTestInitialized) {
+        d.TaskScheduler->template GetData<"CurrentMotorPosition">(d.SystemTestBaseline);
+        d.SystemTestStep = 0;
+        d.SystemTestInitialized = true;
+        d.SystemTestActive = true;
+
+        std::cout << "[SystemTest] joint order trajectory started" << std::endl;
+        std::cout << "[SystemTest] baseline=current motor position. One joint moves at a time in device order." << std::endl;
+        std::cout << "[SystemTest] SAFETY: run on the real robot only when suspended or firmly supported." << std::endl;
+        for (size_t i = 0; i < JOINT_NUMBER; ++i) {
+            std::cout << "[SystemTestMap] index=" << i
+                      << " joint=" << kDeviceOrderJointNames[i]
+                      << " amplitude_rad=" << SystemTestAmplitude(i)
+                      << std::endl;
+        }
+    }
+
+    const RealNumber dt = static_cast<RealNumber>(d.TaskScheduler->getSpinOnceTime());
+    const size_t segment_steps = std::max<size_t>(1, static_cast<size_t>(std::llround(kJointSegmentSeconds / dt)));
+    const size_t hold_steps = std::max<size_t>(1, static_cast<size_t>(std::llround(kInitialHoldSeconds / dt)));
+
+    MotorVec target = d.SystemTestBaseline;
+    MotorVec zero = MotorVec::zeros();
+    size_t active_joint = JOINT_NUMBER;
+    RealNumber offset = 0;
+
+    if (d.SystemTestStep >= hold_steps) {
+        const size_t active_step = d.SystemTestStep - hold_steps;
+        active_joint = active_step / segment_steps;
+        const size_t local_step = active_step % segment_steps;
+
+        if (active_joint < JOINT_NUMBER) {
+            const RealNumber phase = static_cast<RealNumber>(local_step) / static_cast<RealNumber>(segment_steps);
+            offset = SystemTestAmplitude(active_joint) * static_cast<RealNumber>(std::sin(2.0 * kPi * phase));
+            target[active_joint] += offset;
+
+            if (local_step == 0) {
+                std::cout << "[SystemTest] active_index=" << active_joint
+                          << " joint=" << kDeviceOrderJointNames[active_joint]
+                          << " amplitude_rad=" << SystemTestAmplitude(active_joint)
+                          << std::endl;
+            }
+
+            const size_t print_interval = std::max<size_t>(1, segment_steps / 4);
+            if (local_step % print_interval == 0) {
+                MotorVec current;
+                d.TaskScheduler->template GetData<"CurrentMotorPosition">(current);
+                std::cout << "[SystemTestSample] index=" << active_joint
+                          << " joint=" << kDeviceOrderJointNames[active_joint]
+                          << " offset_rad=" << offset
+                          << " target_rad=" << target[active_joint]
+                          << " current_rad=" << current[active_joint]
+                          << std::endl;
+            }
+        } else if (d.SystemTestActive) {
+            d.SystemTestActive = false;
+            std::cout << "[SystemTest] finished. Holding baseline position. Press p to return to init_pose or t to rerun." << std::endl;
+        }
+    }
+
+    d.TaskScheduler->template SetData<"TargetMotorPosition">(target);
+    d.TaskScheduler->template SetData<"TargetMotorVelocity">(zero);
+    d.TaskScheduler->template SetData<"TargetMotorTorque">(zero);
+
+    ++d.SystemTestStep;
+    d.TaskScheduler->SpinOnce();
 }
 
 

@@ -66,9 +66,12 @@ constexpr size_t IMU_ID_MAP = 29;
 constexpr size_t ALTER_IMU_ID_MAP = 30;
 constexpr size_t CAMERA_ID_MAP = 35;
 #else
+// Unitree SDK LowState/LowCmd motor indices and bitbot_unitree.xml device ids
+// both use the same 29-DoF device order:
+// left leg, right leg, waist, left arm, right arm.
 constexpr std::array<size_t, JOINT_NUMBER> JOINT_ID_MAP = {
-    0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28
-}; // Unitree joint mapping is the same as simulation
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28
+};
 constexpr size_t IMU_ID_MAP = 30; // Unitree IMU ID
 constexpr size_t ALTER_IMU_ID_MAP = 31; //unitree alter IMU ID
 constexpr size_t CAMERA_ID_MAP = 35; // Unitree Camera ID

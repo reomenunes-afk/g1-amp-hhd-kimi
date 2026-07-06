@@ -66,6 +66,16 @@ std::optional<bitbot::StateId> EventSystemTestFunc(bitbot::EventValue value,
     //进入bitbot测试状态
     if (value == static_cast<bitbot::EventValue>(bitbot::KeyboardEvent::Up))
     {
+        std::cout << "system test: joint order trajectory test\n";
+        user_data.MotorResetWorker->StopReset();
+        user_data.TaskScheduler->DisableTaskList("ResetTask");
+        user_data.TaskScheduler->DisableTaskList("InferWalkTask");
+        user_data.TaskScheduler->DisableTaskList("DanceInferTask");
+        user_data.ActionManagementWorker->BlockOutput();
+        user_data.MotorWorker->SetCurrentPositionAsTargetPosition();
+        user_data.SystemTestActive = true;
+        user_data.SystemTestInitialized = false;
+        user_data.SystemTestStep = 0;
         return static_cast<bitbot::StateId>(States::StateSystemTest);
     }
     return std::optional<bitbot::StateId>();

@@ -61,6 +61,10 @@
       "kb_key": "g"
     },
     {
+      "event": "system_test",
+      "kb_key": "t"
+    },
+    {
       "event": "velo_x_increase",
       "kb_key": "i"
     },

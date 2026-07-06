@@ -63,6 +63,10 @@ struct UserData
     RealNumber AutoDebugDepthMax = 0;
     RealNumber AutoDebugDepthMean = 0;
     bool SimDiagnosticsEnabled = false;
+    bool SystemTestActive = false;
+    bool SystemTestInitialized = false;
+    size_t SystemTestStep = 0;
+    MotorVec SystemTestBaseline = MotorVec::zeros();
 
 #ifdef BUILD_SIMULATION
     // Optional MuJoCo diagnostics (valid only in simulation builds).
