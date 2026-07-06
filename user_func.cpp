@@ -20,12 +20,34 @@
 #include <iostream> // std::cout
 #include <nlohmann/json.hpp>
 #include <fstream>
+#ifdef BUILD_SIMULATION
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#endif
 #include "types.hpp"
 
 namespace
 {
+template <typename Vec>
+void SaveNormalizedDepthPGM(const std::string& path,
+                            const Vec& values,
+                            size_t width,
+                            size_t height)
+{
+    std::ofstream ofs(path, std::ios::binary);
+    if (!ofs.is_open()) {
+        std::cerr << "[DepthDump] failed to open " << path << std::endl;
+        return;
+    }
+
+    ofs << "P5\n" << width << " " << height << "\n255\n";
+    for (size_t i = 0; i < width * height; ++i) {
+        RealNumber v = std::clamp(values[i], static_cast<RealNumber>(0.0), static_cast<RealNumber>(1.0));
+        unsigned char pixel = static_cast<unsigned char>(v * 255.0f);
+        ofs.write(reinterpret_cast<const char*>(&pixel), 1);
+    }
+}
+
 template <typename Vec>
 void ComputeDepthStats(const Vec& values, RealNumber& min_v, RealNumber& max_v, RealNumber& mean_v)
 {
@@ -78,7 +100,7 @@ constexpr std::array<const char*, JOINT_NUMBER> kDeviceOrderJointNames = {
 RealNumber SystemTestAmplitude(size_t joint_idx)
 {
     if (joint_idx < 12) {
-        return static_cast<RealNumber>(0.06);
+        return static_cast<RealNumber>(0.2);
     }
     if (joint_idx < 15) {
         return static_cast<RealNumber>(0.05);
@@ -262,174 +284,226 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
 
 // 创建相机 Worker（和 AlterImuWorker 一样使用 SimpleCallbackWorker 模式）
 // std::cout << "[camera] CameraWorker created" << std::endl;
-    d.CameraWorker = d.TaskScheduler->template CreateWorker<AlterImuWorkerType>([&d, flip_depth_horizontal, depth_gaussian_blur](SchedulerType::Ptr scheduler) {
-    if (d.CameraPtr && d.CameraPtr->IsReady()) {
-        d.CameraPtr->UpdateFrame();
+    // 创建相机 Worker（和 AlterImuWorker 一样使用 SimpleCallbackWorker 模式）
+    d.CameraWorker = d.TaskScheduler->template CreateWorker<AlterImuWorkerType>(
+        [&d, flip_depth_horizontal, depth_gaussian_blur](SchedulerType::Ptr scheduler) {
+            if (!(d.CameraPtr && d.CameraPtr->IsReady())) {
+                return;
+            }
 
-        auto depth_frame_opt = d.CameraPtr->GetDepthFrame();
-        if (!depth_frame_opt.has_value()) {
-            return;
-        }
+            d.CameraPtr->UpdateFrame();
 
-        DepthFrameType depth_frame = depth_frame_opt.value();
+            auto depth_frame_opt = d.CameraPtr->GetDepthFrame();
+            if (!depth_frame_opt.has_value()) {
+                return;
+            }
 
-        float center_dist = depth_frame.get_distance(
-            d.CameraPtr->GetWidth() / 2,
-            d.CameraPtr->GetHeight() / 2);
-        scheduler->template SetData<"DepthCenterDistance">(center_dist);
+            DepthFrameType depth_frame = depth_frame_opt.value();
 
-        float min_dist = 10.0f, max_dist = 0.0f;
-        for (int y = 0; y < d.CameraPtr->GetHeight(); y += 10) {
-            for (int x = 0; x < d.CameraPtr->GetWidth(); x += 10) {
-                float dist = depth_frame.get_distance(x, y);
-                if (dist > 0 && dist < 10.0f) {
-                    min_dist = std::min(min_dist, dist);
-                    max_dist = std::max(max_dist, dist);
+            const int cam_width = d.CameraPtr->GetWidth();
+            const int cam_height = d.CameraPtr->GetHeight();
+
+            float center_dist = depth_frame.get_distance(cam_width / 2, cam_height / 2);
+            scheduler->template SetData<"DepthCenterDistance">(center_dist);
+
+            float min_dist = 10.0f;
+            float max_dist = 0.0f;
+            for (int y = 0; y < cam_height; y += 10) {
+                for (int x = 0; x < cam_width; x += 10) {
+                    float dist = depth_frame.get_distance(x, y);
+                    if (dist > 0.0f && dist < 10.0f) {
+                        min_dist = std::min(min_dist, dist);
+                        max_dist = std::max(max_dist, dist);
+                    }
                 }
             }
-        }
+            scheduler->template SetData<"DepthMinDistance">(min_dist);
+            scheduler->template SetData<"DepthMaxDistance">(max_dist);
 
-        scheduler->template SetData<"DepthMinDistance">(min_dist);
-        scheduler->template SetData<"DepthMaxDistance">(max_dist);
+            using ParkourDepthFrame = std::array<RealNumber, PARKOUR_DEPTH_HEIGHT * PARKOUR_DEPTH_WIDTH>;
+            static std::deque<ParkourDepthFrame> parkour_depth_history;
 
-          using ParkourDepthFrame = std::array<RealNumber, PARKOUR_DEPTH_HEIGHT * PARKOUR_DEPTH_WIDTH>;
-          static std::deque<ParkourDepthFrame> parkour_depth_history;
-          constexpr size_t kHistorySkipFrames = 5;
-          constexpr size_t kHistoryOffset = 1;
-          constexpr size_t kRawWidth = 64;
-          constexpr size_t kRawHeight = 36;
-          constexpr size_t kCropUp = 18;
-          constexpr size_t kCropLeft = 16;
-          constexpr RealNumber kDepthNormMax = 2.5;
+            constexpr size_t kHistorySkipFrames = 5;
+            constexpr size_t kHistoryOffset = 1;
+            constexpr size_t kRawWidth = 64;
+            constexpr size_t kRawHeight = 36;
+            constexpr size_t kCropUp = 18;
+            constexpr size_t kCropLeft = 16;
+            constexpr RealNumber kDepthNormMax = static_cast<RealNumber>(2.5);
 
-          ParkourDepthFrame frame{};
-          if (static_cast<size_t>(d.CameraPtr->GetWidth()) == kRawWidth &&
-              static_cast<size_t>(d.CameraPtr->GetHeight()) == kRawHeight) {
-              for (size_t y = 0; y < PARKOUR_DEPTH_HEIGHT; ++y) {
-                  for (size_t x = 0; x < PARKOUR_DEPTH_WIDTH; ++x) {
-                      float depth = depth_frame.get_distance(
-                          static_cast<int>(x + kCropLeft),
-                          static_cast<int>(y + kCropUp));
-                      RealNumber normalized = 1.0;
-                      if (depth > 0.0f) {
-                          normalized = std::clamp(static_cast<RealNumber>(depth) / kDepthNormMax,
-                                                  static_cast<RealNumber>(0.0),
-                                                  static_cast<RealNumber>(1.0));
-                      }
-                      const size_t out_x = flip_depth_horizontal
-                          ? (PARKOUR_DEPTH_WIDTH - 1 - x)
-                          : x;
-                      frame[y * PARKOUR_DEPTH_WIDTH + out_x] = normalized;
-                  }
-              }
+            ParkourDepthFrame frame{};
+            std::array<RealNumber, kRawWidth * kRawHeight> raw_resized{};
 
-              if (depth_gaussian_blur) {
-                  ParkourDepthFrame blurred = frame;
-                  constexpr RealNumber k0 = static_cast<RealNumber>(0.27406862);
-                  constexpr RealNumber k1 = static_cast<RealNumber>(0.45186276);
-                  const RealNumber kernel[3] = {k0, k1, k0};
-                  for (size_t y = 0; y < PARKOUR_DEPTH_HEIGHT; ++y) {
-                      for (size_t x = 0; x < PARKOUR_DEPTH_WIDTH; ++x) {
-                          RealNumber sum = 0;
-                          RealNumber weight_sum = 0;
-                          for (int dy = -1; dy <= 1; ++dy) {
-                              const int yy = static_cast<int>(y) + dy;
-                              if (yy < 0 || yy >= static_cast<int>(PARKOUR_DEPTH_HEIGHT)) {
-                                  continue;
-                              }
-                              for (int dx = -1; dx <= 1; ++dx) {
-                                  const int xx = static_cast<int>(x) + dx;
-                                  if (xx < 0 || xx >= static_cast<int>(PARKOUR_DEPTH_WIDTH)) {
-                                      continue;
-                                  }
-                                  const RealNumber weight = kernel[dy + 1] * kernel[dx + 1];
-                                  sum += frame[static_cast<size_t>(yy) * PARKOUR_DEPTH_WIDTH + static_cast<size_t>(xx)] * weight;
-                                  weight_sum += weight;
-                              }
-                          }
-                          blurred[y * PARKOUR_DEPTH_WIDTH + x] = sum / weight_sum;
-                      }
-                  }
-                  frame = blurred;
-              }
+            constexpr size_t kSrcCropLeft = 16;
+            constexpr size_t kSrcCropRight = 16;
 
-              const size_t required_history = (PARKOUR_DEPTH_HISTORY - 1) * kHistorySkipFrames + 1 + kHistoryOffset;
-              if (parkour_depth_history.empty()) {
-                  ParkourDepthFrame initial_frame{};
-                  initial_frame.fill(static_cast<RealNumber>(1.0));
-                  for (size_t i = 0; i < required_history; ++i) {
-                      parkour_depth_history.push_back(initial_frame);
-                  }
-              }
-              parkour_depth_history.push_back(frame);
-              while (parkour_depth_history.size() > required_history) {
-                  parkour_depth_history.pop_front();
-              }
-              ++d.AutoDebugCameraFrames;
-              d.AutoDebugDepthHistorySize = parkour_depth_history.size();
+            const size_t src_w = static_cast<size_t>(cam_width);
+            const size_t src_h = static_cast<size_t>(cam_height);
 
-              ParkourDepthImageVec depth_obs;
-              if (parkour_depth_history.size() >= required_history) {
-                  for (size_t h = 0; h < PARKOUR_DEPTH_HISTORY; ++h) {
-                      const size_t history_index = parkour_depth_history.size() - required_history + kHistoryOffset + h * kHistorySkipFrames;
-                      const auto& selected_frame = parkour_depth_history[history_index];
-                      std::copy(selected_frame.begin(),
-                                selected_frame.end(),
-                                depth_obs.begin() + static_cast<std::ptrdiff_t>(h * selected_frame.size()));
-                  }
-              } else {
-                  for (size_t h = 0; h < PARKOUR_DEPTH_HISTORY; ++h) {
-                      std::copy(frame.begin(),
-                                frame.end(),
-                                depth_obs.begin() + static_cast<std::ptrdiff_t>(h * frame.size()));
-                  }
-              }
-              ComputeDepthStats(depth_obs, d.AutoDebugDepthMin, d.AutoDebugDepthMax, d.AutoDebugDepthMean);
-              d.AutoDebugDepthReady = parkour_depth_history.size() >= required_history;
-              if (d.AutoDebugCameraFrames == 1 ||
-                  d.AutoDebugCameraFrames == required_history ||
-                  d.AutoDebugCameraFrames % 30 == 0) {
-                  if (d.SimDiagnosticsEnabled) {
-                      std::cout << "[SimDepth] camera_frames=" << d.AutoDebugCameraFrames
-                                << " history_size=" << d.AutoDebugDepthHistorySize
-                                << "/" << required_history
-                                << " ready=" << d.AutoDebugDepthReady
-                                << " min=" << d.AutoDebugDepthMin
-                                << " max=" << d.AutoDebugDepthMax
-                                << " mean=" << d.AutoDebugDepthMean
-                                << std::endl;
-                  }
-              }
-              scheduler->template SetData<"ParkourDepthImage">(depth_obs);
+            const size_t roi_x0 = kSrcCropLeft;
+            const size_t roi_x1 = src_w - kSrcCropRight;
+            const size_t roi_w = roi_x1 - roi_x0;
 
-              if (d.SimDiagnosticsEnabled && d.AutoDebugCameraFrames % 30 == 0) {
-                  cv::Mat raw_gray(static_cast<int>(kRawHeight), static_cast<int>(kRawWidth), CV_8UC1);
-                  for (size_t y = 0; y < kRawHeight; ++y) {
-                      for (size_t x = 0; x < kRawWidth; ++x) {
-                          float depth = depth_frame.get_distance(static_cast<int>(x), static_cast<int>(y));
-                          float norm = 1.0f;
-                          if (depth > 0.0f) {
-                              norm = 1.0f - std::clamp(depth / static_cast<float>(kDepthNormMax), 0.0f, 1.0f);
-                          }
-                          raw_gray.at<unsigned char>(static_cast<int>(y), static_cast<int>(x)) = static_cast<unsigned char>(norm * 255.0f);
-                      }
-                  }
-                  std::string raw_path = "/tmp/mujoco_depth_raw_" + std::to_string(d.AutoDebugCameraFrames) + ".png";
-                  cv::imwrite(raw_path, raw_gray);
+            // Step 1: resize real depth to a virtual 64x36 depth image.
+            for (size_t ry = 0; ry < kRawHeight; ++ry) {
+                const size_t y0 = ry * src_h / kRawHeight;
+                const size_t y1 = std::max(y0 + 1, ((ry + 1) * src_h) / kRawHeight);
 
-                  cv::Mat crop_gray(static_cast<int>(PARKOUR_DEPTH_HEIGHT), static_cast<int>(PARKOUR_DEPTH_WIDTH), CV_8UC1);
-                  for (size_t y = 0; y < PARKOUR_DEPTH_HEIGHT; ++y) {
-                      for (size_t x = 0; x < PARKOUR_DEPTH_WIDTH; ++x) {
-                          float norm = 1.0f - frame[y * PARKOUR_DEPTH_WIDTH + x];
-                          crop_gray.at<unsigned char>(static_cast<int>(y), static_cast<int>(x)) = static_cast<unsigned char>(norm * 255.0f);
-                      }
-                  }
-                  std::string crop_path = "/tmp/mujoco_depth_crop_" + std::to_string(d.AutoDebugCameraFrames) + ".png";
-                  cv::imwrite(crop_path, crop_gray);
-              }
-          }
-    }
-});
+                for (size_t rx = 0; rx < kRawWidth; ++rx) {
+                    const size_t x0 = roi_x0 + rx * roi_w / kRawWidth;
+                const size_t x1 = std::max(x0 + 1, roi_x0 + ((rx + 1) * roi_w) / kRawWidth);
+
+                    RealNumber nearest_depth = kDepthNormMax;
+                    bool found_valid_depth = false;
+
+                    for (size_t sy = y0; sy < y1; ++sy) {
+                        for (size_t sx = x0; sx < x1; ++sx) {
+                            float depth = depth_frame.get_distance(static_cast<int>(sx), static_cast<int>(sy));
+                            if (depth > 0.1f && depth < static_cast<float>(kDepthNormMax)) {
+                                nearest_depth = std::min(nearest_depth, static_cast<RealNumber>(depth));
+                                found_valid_depth = true;
+                            }
+                        }
+                    }
+
+                    raw_resized[ry * kRawWidth + rx] =
+                        found_valid_depth ? nearest_depth : kDepthNormMax;
+
+                    if (d.AutoDebugCameraFrames % 300 == 0) {
+                        std::array<RealNumber, kRawWidth * kRawHeight> raw_resized_norm{};
+                        for (size_t i = 0; i < kRawWidth * kRawHeight; ++i) {
+                            raw_resized_norm[i] = std::clamp(
+                                raw_resized[i] / kDepthNormMax,
+                                static_cast<RealNumber>(0.0),
+                                static_cast<RealNumber>(1.0));
+                        }
+
+                        SaveNormalizedDepthPGM(
+                            "/tmp/realsense_depth_64x36.pgm",
+                            raw_resized_norm,
+                            kRawWidth,
+                            kRawHeight);
+
+                        std::cout << "[DepthDump] saved /tmp/realsense_depth_64x36.pgm" << std::endl;
+                    }
+                }
+            }
+
+            // Step 2: apply the same crop as the Python MuJoCo reference.
+            for (size_t y = 0; y < PARKOUR_DEPTH_HEIGHT; ++y) {
+                for (size_t x = 0; x < PARKOUR_DEPTH_WIDTH; ++x) {
+                    const RealNumber depth =
+                        raw_resized[(y + kCropUp) * kRawWidth + (x + kCropLeft)];
+
+                    RealNumber normalized = std::clamp(
+                        depth / kDepthNormMax,
+                        static_cast<RealNumber>(0.0),
+                        static_cast<RealNumber>(1.0));
+
+                    const size_t out_x = flip_depth_horizontal
+                        ? (PARKOUR_DEPTH_WIDTH - 1 - x)
+                        : x;
+                    frame[y * PARKOUR_DEPTH_WIDTH + out_x] = normalized;
+                }
+            }
+
+            if (depth_gaussian_blur) {
+                ParkourDepthFrame blurred = frame;
+                constexpr RealNumber k0 = static_cast<RealNumber>(0.27406862);
+                constexpr RealNumber k1 = static_cast<RealNumber>(0.45186276);
+                const RealNumber kernel[3] = {k0, k1, k0};
+
+                for (size_t y = 0; y < PARKOUR_DEPTH_HEIGHT; ++y) {
+                    for (size_t x = 0; x < PARKOUR_DEPTH_WIDTH; ++x) {
+                        RealNumber sum = 0;
+                        RealNumber weight_sum = 0;
+                        for (int dy = -1; dy <= 1; ++dy) {
+                            const int yy = static_cast<int>(y) + dy;
+                            if (yy < 0 || yy >= static_cast<int>(PARKOUR_DEPTH_HEIGHT)) {
+                                continue;
+                            }
+                            for (int dx = -1; dx <= 1; ++dx) {
+                                const int xx = static_cast<int>(x) + dx;
+                                if (xx < 0 || xx >= static_cast<int>(PARKOUR_DEPTH_WIDTH)) {
+                                    continue;
+                                }
+                                const RealNumber weight = kernel[dy + 1] * kernel[dx + 1];
+                                sum += frame[static_cast<size_t>(yy) * PARKOUR_DEPTH_WIDTH +
+                                             static_cast<size_t>(xx)] * weight;
+                                weight_sum += weight;
+                            }
+                        }
+                        blurred[y * PARKOUR_DEPTH_WIDTH + x] = sum / weight_sum;
+                    }
+                }
+                frame = blurred;
+            }
+
+            const size_t required_history =
+                (PARKOUR_DEPTH_HISTORY - 1) * kHistorySkipFrames + 1 + kHistoryOffset;
+
+            if (parkour_depth_history.empty()) {
+                ParkourDepthFrame initial_frame{};
+                initial_frame.fill(static_cast<RealNumber>(1.0));
+                for (size_t i = 0; i < required_history; ++i) {
+                    parkour_depth_history.push_back(initial_frame);
+                }
+            }
+
+            parkour_depth_history.push_back(frame);
+            while (parkour_depth_history.size() > required_history) {
+                parkour_depth_history.pop_front();
+            }
+
+            ++d.AutoDebugCameraFrames;
+            d.AutoDebugDepthHistorySize = parkour_depth_history.size();
+
+            ParkourDepthImageVec depth_obs;
+            if (parkour_depth_history.size() >= required_history) {
+                for (size_t h = 0; h < PARKOUR_DEPTH_HISTORY; ++h) {
+                    const size_t history_index =
+                        parkour_depth_history.size() - required_history +
+                        kHistoryOffset + h * kHistorySkipFrames;
+                    const auto& selected_frame = parkour_depth_history[history_index];
+                    std::copy(
+                        selected_frame.begin(),
+                        selected_frame.end(),
+                        depth_obs.begin() + static_cast<std::ptrdiff_t>(h * selected_frame.size()));
+                }
+            } else {
+                for (size_t h = 0; h < PARKOUR_DEPTH_HISTORY; ++h) {
+                    std::copy(
+                        frame.begin(),
+                        frame.end(),
+                        depth_obs.begin() + static_cast<std::ptrdiff_t>(h * frame.size()));
+                }
+            }
+
+            ComputeDepthStats(depth_obs, d.AutoDebugDepthMin, d.AutoDebugDepthMax, d.AutoDebugDepthMean);
+            d.AutoDebugDepthReady = parkour_depth_history.size() >= required_history;
+
+            // if (d.AutoDebugCameraFrames == 1 || d.AutoDebugCameraFrames % 30 == 0) {
+            //     std::cout << "[RealDepth] frames=" << d.AutoDebugCameraFrames
+            //               << " hist=" << d.AutoDebugDepthHistorySize
+            //               << "/" << required_history
+            //               << " ready=" << d.AutoDebugDepthReady
+            //               << " min=" << d.AutoDebugDepthMin
+            //               << " max=" << d.AutoDebugDepthMax
+            //               << " mean=" << d.AutoDebugDepthMean
+            //               << std::endl;
+            // }
+
+            scheduler->template SetData<"ParkourDepthImage">(depth_obs);
+            if (d.AutoDebugCameraFrames % 30 == 0) {
+                SaveNormalizedDepthPGM(
+                    "/tmp/realsense_policy_depth_18x32.pgm",
+                    frame,
+                    PARKOUR_DEPTH_WIDTH,
+                    PARKOUR_DEPTH_HEIGHT);
+
+                std::cout << "[DepthDump] saved /tmp/realsense_policy_depth_18x32.pgm" << std::endl;
+            }
+        });
 
     //创建主任务列表，并添加worker
     d.TaskScheduler->CreateTaskList("MainTask", 1, true);
@@ -651,6 +725,9 @@ void StateSystemTestFunc(const bitbot::KernelInterface& kernel,
     const RealNumber dt = static_cast<RealNumber>(d.TaskScheduler->getSpinOnceTime());
     const size_t segment_steps = std::max<size_t>(1, static_cast<size_t>(std::llround(kJointSegmentSeconds / dt)));
     const size_t hold_steps = std::max<size_t>(1, static_cast<size_t>(std::llround(kInitialHoldSeconds / dt)));
+    constexpr size_t kSystemTestStartJoint = 0;
+    constexpr size_t kSystemTestEndJoint = 6;   // only test left leg: [0, 5]
+    const size_t test_joint_count = kSystemTestEndJoint - kSystemTestStartJoint;
 
     MotorVec target = d.SystemTestBaseline;
     MotorVec zero = MotorVec::zeros();
@@ -658,38 +735,98 @@ void StateSystemTestFunc(const bitbot::KernelInterface& kernel,
     RealNumber offset = 0;
 
     if (d.SystemTestStep >= hold_steps) {
-        const size_t active_step = d.SystemTestStep - hold_steps;
-        active_joint = active_step / segment_steps;
-        const size_t local_step = active_step % segment_steps;
+    const size_t active_step = d.SystemTestStep - hold_steps;
+    const size_t active_joint_local = active_step / segment_steps;
+    const size_t local_step = active_step % segment_steps;
 
-        if (active_joint < JOINT_NUMBER) {
-            const RealNumber phase = static_cast<RealNumber>(local_step) / static_cast<RealNumber>(segment_steps);
-            offset = SystemTestAmplitude(active_joint) * static_cast<RealNumber>(std::sin(2.0 * kPi * phase));
-            target[active_joint] += offset;
+    if (active_joint_local < test_joint_count) {
+        active_joint = kSystemTestStartJoint + active_joint_local;
 
-            if (local_step == 0) {
-                std::cout << "[SystemTest] active_index=" << active_joint
-                          << " joint=" << kDeviceOrderJointNames[active_joint]
-                          << " amplitude_rad=" << SystemTestAmplitude(active_joint)
-                          << std::endl;
-            }
-
-            const size_t print_interval = std::max<size_t>(1, segment_steps / 4);
-            if (local_step % print_interval == 0) {
-                MotorVec current;
-                d.TaskScheduler->template GetData<"CurrentMotorPosition">(current);
-                std::cout << "[SystemTestSample] index=" << active_joint
-                          << " joint=" << kDeviceOrderJointNames[active_joint]
-                          << " offset_rad=" << offset
-                          << " target_rad=" << target[active_joint]
-                          << " current_rad=" << current[active_joint]
-                          << std::endl;
-            }
-        } else if (d.SystemTestActive) {
-            d.SystemTestActive = false;
-            std::cout << "[SystemTest] finished. Holding baseline position. Press p to return to init_pose or t to rerun." << std::endl;
+        if (local_step == 0) {
+            d.SystemTestPeakAbsDelta = MotorVec::zeros();
+            std::cout << "[SystemTest] active_index=" << active_joint
+                      << " joint=" << kDeviceOrderJointNames[active_joint]
+                      << " amplitude_rad=" << SystemTestAmplitude(active_joint)
+                      << std::endl;
         }
+
+        const RealNumber phase =
+            static_cast<RealNumber>(local_step) / static_cast<RealNumber>(segment_steps);
+        offset = SystemTestAmplitude(active_joint) *
+                 static_cast<RealNumber>(std::sin(2.0 * kPi * phase));
+        target[active_joint] += offset;
+
+        MotorVec current;
+        d.TaskScheduler->template GetData<"CurrentMotorPosition">(current);
+
+        for (size_t i = 0; i < JOINT_NUMBER; ++i) {
+            const RealNumber abs_delta =
+                static_cast<RealNumber>(std::abs(current[i] - d.SystemTestBaseline[i]));
+            if (abs_delta > d.SystemTestPeakAbsDelta[i]) {
+                d.SystemTestPeakAbsDelta[i] = abs_delta;
+            }
+        }
+
+        const size_t print_interval = std::max<size_t>(1, segment_steps / 4);
+        if (local_step % print_interval == 0) {
+            std::cout << "[SystemTestSample] index=" << active_joint
+                      << " joint=" << kDeviceOrderJointNames[active_joint]
+                      << " offset_rad=" << offset
+                      << " target_rad=" << target[active_joint]
+                      << " current_rad=" << current[active_joint]
+                      << std::endl;
+        }
+
+        if (local_step + 1 == segment_steps) {
+            size_t best_idx = 0;
+            size_t second_idx = 0;
+            RealNumber best_val = static_cast<RealNumber>(-1.0);
+            RealNumber second_val = static_cast<RealNumber>(-1.0);
+
+            for (size_t i = 0; i < JOINT_NUMBER; ++i) {
+                const RealNumber v = d.SystemTestPeakAbsDelta[i];
+                if (v > best_val) {
+                    second_val = best_val;
+                    second_idx = best_idx;
+                    best_val = v;
+                    best_idx = i;
+                } else if (v > second_val) {
+                    second_val = v;
+                    second_idx = i;
+                }
+            }
+
+            const RealNumber expected_peak = d.SystemTestPeakAbsDelta[active_joint];
+            const RealNumber min_response = std::max(
+                static_cast<RealNumber>(0.01),
+                static_cast<RealNumber>(0.20) * SystemTestAmplitude(active_joint));
+
+            const bool dominance_ok =
+                (second_val <= static_cast<RealNumber>(1e-6)) ||
+                (best_val >= static_cast<RealNumber>(1.2) * second_val);
+
+            const bool pass =
+                (best_idx == active_joint) &&
+                (expected_peak >= min_response) &&
+                dominance_ok;
+
+            std::cout << "[SystemTestAutoCheck] expected_index=" << active_joint
+                      << " expected_joint=" << kDeviceOrderJointNames[active_joint]
+                      << " detected_index=" << best_idx
+                      << " detected_joint=" << kDeviceOrderJointNames[best_idx]
+                      << " expected_peak=" << expected_peak
+                      << " detected_peak=" << best_val
+                      << " second_index=" << second_idx
+                      << " second_peak=" << second_val
+                      << " result=" << (pass ? "PASS" : "FAIL")
+                      << std::endl;
+        }
+    } else if (d.SystemTestActive) {
+        d.SystemTestActive = false;
+        std::cout << "[SystemTest] finished. Holding baseline position. Press p to return to init_pose or t to rerun."
+                  << std::endl;
     }
+}
 
     d.TaskScheduler->template SetData<"TargetMotorPosition">(target);
     d.TaskScheduler->template SetData<"TargetMotorVelocity">(zero);

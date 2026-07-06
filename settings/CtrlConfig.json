@@ -209,7 +209,7 @@
       },
       "Network": {
         //"ModelPath": "../../CheckPoints/policy_102.onnx",
-        "ModelPath": "/home/bytedance/Documents/unitree_bitbot_hhd/CheckPoints/policy_gangnam.onnx",
+        "ModelPath": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/policy_gangnam.onnx",
         //"ModelPath": "../../CheckPoints/policy_kuailechongbai.onnx",
         "InputNodeNames": [
           "obs"
@@ -222,7 +222,7 @@
       },
       "Preprocess": {
         //"trajectory_path": "../../CheckPoints/G1_Take_102.bvh_60hz.csv",
-        "trajectory_path": "/home/bytedance/Documents/unitree_bitbot_hhd/CheckPoints/G1_gangnam_style_V01.bvh_60hz.csv",
+        "trajectory_path": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/G1_gangnam_style_V01.bvh_60hz.csv",
         //"trajectory_path": "../../CheckPoints/jiaqi_KuaileChongbai2.csv",
         "include_velocity": false
       },
@@ -297,8 +297,8 @@
         "IntraNumberThreads": 1
       },
       "Network": {
-          "ModelPath": "/home/bytedance/Documents/unitree_bitbot_hhd/CheckPoints/version_policy/actor.onnx",
-          "EncoderModelPath": "/home/bytedance/Documents/unitree_bitbot_hhd/CheckPoints/version_policy/0-depth_encoder.onnx",
+          "ModelPath": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/version_policy/actor.onnx",
+          "EncoderModelPath": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/version_policy/0-depth_encoder.onnx",
         "InputNodeNames": [
             "input"
         ],
@@ -308,11 +308,11 @@
       },
       "Preprocess": {
           "ImuYawCorrectionRad": 0.0,
-          "ForceDepthValue": -1.0,
+          "ForceDepthValue": 1.0,
           "ReverseProprioHistory": false,
           "UseAlterImu": false,
-          "FlipDepthHorizontal": true,
-          "DepthGaussianBlur": true,
+          "FlipDepthHorizontal": false,
+          "DepthGaussianBlur": false,
           "InvertAngVelZ": false,
           "UseMujocoRootQvelAngVel": false,
           "UseImuRotationMatrixProjectedGravity": true,

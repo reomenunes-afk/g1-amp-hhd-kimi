@@ -110,9 +110,9 @@ namespace bitbot {
       latest_min_mm_ = min_dist * 1000.0f;          // 改这里
       latest_max_mm_ = max_dist * 1000.0f;          // 改这里
 
-      std::cout << "[camera] frame ok center=" << latest_center_mm_
-          << " min=" << latest_min_mm_
-          << " max=" << latest_max_mm_ << std::endl;
+      // std::cout << "[camera] frame ok center=" << latest_center_mm_
+      //     << " min=" << latest_min_mm_
+      //     << " max=" << latest_max_mm_ << std::endl;
 
       depth_history_.push_back(pkt);
       while (depth_history_.size() > kDepthHistorySize) {

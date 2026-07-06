@@ -67,6 +67,7 @@ struct UserData
     bool SystemTestInitialized = false;
     size_t SystemTestStep = 0;
     MotorVec SystemTestBaseline = MotorVec::zeros();
+    MotorVec SystemTestPeakAbsDelta = MotorVec::zeros();
 
 #ifdef BUILD_SIMULATION
     // Optional MuJoCo diagnostics (valid only in simulation builds).
