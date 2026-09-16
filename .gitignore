@@ -9,3 +9,5 @@
 /builds
 /vcpkg_installed
 /log
+__pycache__/
+*.pyc
