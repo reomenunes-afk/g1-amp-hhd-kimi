@@ -34,7 +34,7 @@ struct UserData
     MotorWorkerType* MotorWorker;
     LoggerWorkerType* Logger;
     BeyondMimicUnitreeInferWorkerType* DanceNetInferWorker;
-    UnitreeRlLabVelocityInferWorkerType* WalkNetInferWorker;
+    HumanoidGymAmpInferWorkerType* WalkNetInferWorker;
     MotorResetWorkerType* MotorResetWorker;
     ActionManagementWorkerType* ActionManagementWorker;
     CmdWorkerType* WalkCmdWorker;

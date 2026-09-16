@@ -1,0 +1,77 @@
+[
+  {
+    "checkpoint": "/home/hyk/humanoid-gym/logs/amp_ppo/Sep14_01-21-46_amp_v153_actor_projected_gravity_local5080/model_1400.pt",
+    "checkpoint_sha256": "829b312a39082023f278ce23ab2de96ebd686c0f252ea77e224d6efcb42c58c2",
+    "checkpoint_iter": 1401,
+    "onnx": "/home/hyk/unitree_bitbot_hhd/CheckPoints/amp_v153_projected_gravity_model_1400.onnx",
+    "onnx_sha256": "1ffaefe6000951cd0514ab42618ccc0a5e70a6f6edc9ff67d87c72370fa589d9",
+    "input": {
+      "name": "obs",
+      "shape": [
+        "batch",
+        1470
+      ],
+      "dtype": "float32"
+    },
+    "output": {
+      "name": "actions",
+      "shape": [
+        "batch",
+        29
+      ],
+      "dtype": "float32"
+    },
+    "opset": 17,
+    "observation_contract": "v153 projected-gravity, 15 oldest-to-newest frames x 98"
+  },
+  {
+    "checkpoint": "/home/hyk/humanoid-gym/logs/amp_ppo/Sep14_01-21-46_amp_v153_actor_projected_gravity_local5080/model_2500.pt",
+    "checkpoint_sha256": "7197a84df8217fe2617e45e29ed797d5929ee58e3a650cadc3b28a5c46342569",
+    "checkpoint_iter": 2501,
+    "onnx": "/home/hyk/unitree_bitbot_hhd/CheckPoints/amp_v153_projected_gravity_model_2500.onnx",
+    "onnx_sha256": "eebfde9bd1627b1962d938c33734439b2c623d16f6603bdddb35fb5c21011260",
+    "input": {
+      "name": "obs",
+      "shape": [
+        "batch",
+        1470
+      ],
+      "dtype": "float32"
+    },
+    "output": {
+      "name": "actions",
+      "shape": [
+        "batch",
+        29
+      ],
+      "dtype": "float32"
+    },
+    "opset": 17,
+    "observation_contract": "v153 projected-gravity, 15 oldest-to-newest frames x 98"
+  },
+  {
+    "checkpoint": "/home/hyk/humanoid-gym/logs/amp_ppo/Sep14_01-21-46_amp_v153_actor_projected_gravity_local5080/model_2800.pt",
+    "checkpoint_sha256": "8c6d6e671e24ef6dee8fc67b6f005211b856ba1c4d452ca9df9c054a9e8b4bd0",
+    "checkpoint_iter": 2801,
+    "onnx": "/home/hyk/unitree_bitbot_hhd/CheckPoints/amp_v153_projected_gravity_model_2800.onnx",
+    "onnx_sha256": "26657a4ceb969f5d44b449a0fbfed668f2f675b46c3aa1a940286581ab517394",
+    "input": {
+      "name": "obs",
+      "shape": [
+        "batch",
+        1470
+      ],
+      "dtype": "float32"
+    },
+    "output": {
+      "name": "actions",
+      "shape": [
+        "batch",
+        29
+      ],
+      "dtype": "float32"
+    },
+    "opset": 17,
+    "observation_contract": "v153 projected-gravity, 15 oldest-to-newest frames x 98"
+  }
+]

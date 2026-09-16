@@ -3,7 +3,8 @@
     "dt": 0.002,
     "CheckFrequency": true,
     "InferTask": {
-      "PolicyFrequency": 10
+      "PolicyFrequency": 10, // dance task divider only (50Hz)
+      "AmpPolicyFrequency": 5 // AMP walk task divider: 500Hz / 5 = 100Hz (training policy dt = 0.01s)
     }
   },
   "AutoDebug": {
@@ -24,67 +25,22 @@
       "MotorProperties": [
         {
           "PolicyNetName": "WalkNet1",
+          // HumanoidGym AMP v153 training gains (humanoid_config.py / g1_config.py):
+          // Kp: hip=100, knee=150, ankle=40, waist_yaw=200, waist_roll/pitch=40, arm=40
           "Stiffness": [
-            40.1792384714,
-            99.0984277767,
-            40.1792384714,
-            99.0984277767,
-            28.5012461957,
-            28.5012461957,
-            40.1792384714,
-            99.0984277767,
-            40.1792384714,
-            99.0984277767,
-            28.5012461957,
-            28.5012461957,
-            40.1792384714,
-            28.5012461957,
-            28.5012461957,
-            14.2506230979,
-            14.2506230979,
-            14.2506230979,
-            14.2506230979,
-            14.2506230979,
-            16.7783274809,
-            16.7783274809,
-            14.2506230979,
-            14.2506230979,
-            14.2506230979,
-            14.2506230979,
-            14.2506230979,
-            16.7783274809,
-            16.7783274809
+            100.0, 100.0, 100.0, 150.0, 40.0, 40.0,
+            100.0, 100.0, 100.0, 150.0, 40.0, 40.0,
+            200.0, 40.0, 40.0,
+            40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,
+            40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0
           ],
+          // Kd: hip=2, knee=4, ankle=2, waist=5, arm=1
           "Damping": [
-            2.5578897650,
-            6.3088018535,
-            2.5578897650,
-            6.3088018535,
-            1.8144456866,
-            1.8144456866,
-            2.5578897650,
-            6.3088018535,
-            2.5578897650,
-            6.3088018535,
-            1.8144456866,
-            1.8144456866,
-            2.5578897650,
-            1.8144456866,
-            1.8144456866,
-            0.9072228433,
-            0.9072228433,
-            0.9072228433,
-            0.9072228433,
-            0.9072228433,
-            1.0681415022,
-            1.0681415022,
-            0.9072228433,
-            0.9072228433,
-            0.9072228433,
-            0.9072228433,
-            0.9072228433,
-            1.0681415022,
-            1.0681415022
+            2.0, 2.0, 2.0, 4.0, 2.0, 2.0,
+            2.0, 2.0, 2.0, 4.0, 2.0, 2.0,
+            5.0, 5.0, 5.0,
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
           ]
         },
         {
@@ -155,36 +111,15 @@
       ]
     },
     "MotorControl": {
+      // AMP default pose (humanoid-gym G1_amp default_joint_angles, device order).
+      // The p-key reset now moves to this pose so that the reset pose matches the
+      // policy PD center (original framework reset pose was a deeper crouch).
       "DefaultPosition": [
-        -0.312,
-        0.0,
-        0.0,
-        0.669,
-        -0.363,
-        0.0,
-        -0.312,
-        0.0,
-        0.0,
-        0.669,
-        -0.363,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.2,
-        0.2,
-        0.0,
-        0.6,
-        0.0,
-        0.0,
-        0.0,
-        0.2,
-        -0.2,
-        0.0,
-        0.6,
-        0.0,
-        0.0,
-        0.0
+        -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+        -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+        0.0, 0.0, 0.11,
+        0.15, 0.25, -0.48, 0.97, 0.15, 0.0, 0.0,
+        0.15, -0.25, 0.48, 0.97, -0.15, 0.0, 0.0
       ]
     },
     "ImuProcess": {
@@ -209,7 +144,7 @@
       },
       "Network": {
         //"ModelPath": "../../CheckPoints/policy_102.onnx",
-        "ModelPath": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/policy_gangnam.onnx",
+        "ModelPath": "../../CheckPoints/policy_gangnam.onnx",
         //"ModelPath": "../../CheckPoints/policy_kuailechongbai.onnx",
         "InputNodeNames": [
           "obs"
@@ -222,7 +157,7 @@
       },
       "Preprocess": {
         //"trajectory_path": "../../CheckPoints/G1_Take_102.bvh_60hz.csv",
-        "trajectory_path": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/G1_gangnam_style_V01.bvh_60hz.csv",
+        "trajectory_path": "../../CheckPoints/G1_gangnam_style_V01.bvh_60hz.csv",
         //"trajectory_path": "../../CheckPoints/jiaqi_KuaileChongbai2.csv",
         "include_velocity": false
       },
@@ -291,137 +226,63 @@
         -0.00715
       ]
     },
+    // HumanoidGym AMP v153 (actor projected-gravity): input obs[batch,1470] = 15 frames x 98
+    // (oldest->newest), output actions[batch,29]. See HumanoidGymAmpInferenceWorker.hpp.
     "WalkNet1": {
       "Inference": {
         "WarmUpModel": false,
         "IntraNumberThreads": 1
       },
       "Network": {
-          "ModelPath": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/version_policy/actor.onnx",
-          "EncoderModelPath": "/home/unitree/Documents/unitree_bitbot_hhd/CheckPoints/version_policy/0-depth_encoder.onnx",
+        // path is resolved against the process working directory; run from build/bin
+        "ModelPath": "../../CheckPoints/amp_v153_projected_gravity_model_2500.onnx",
         "InputNodeNames": [
-            "input"
+          "obs"
         ],
         "OutputNodeNames": [
-            "output"
-        ]
+          "actions"
+        ],
+        "Cycle_time": 0.64, // gait cycle time in seconds (training cycle_time)
+        "PolicyDt": 0.01 // policy period in seconds (100Hz = 500Hz bus / AmpPolicyFrequency 5)
       },
       "Preprocess": {
-          "ImuYawCorrectionRad": 0.0,
-          "ForceDepthValue": 1.0,
-          "ReverseProprioHistory": false,
-          "UseAlterImu": false,
-          "FlipDepthHorizontal": false,
-          "DepthGaussianBlur": false,
-          "InvertAngVelZ": false,
-          "UseMujocoRootQvelAngVel": false,
-          "UseImuRotationMatrixProjectedGravity": true,
-          "HeadingHoldKp": 0.0,
-          "HeadingHoldMaxYawRate": 0.6,
-          "PolicyWarmupSteps": 40,
+        // IMU is in the torso; training base body is the pelvis. Compensate with the
+        // waist joint chain (encoders), identical code path on sim and real robot.
+        "WaistCompensation": true,
         "ObservationScales": {
-          "lin_vel": 0.0,
-            "ang_vel": 0.25,
-          "project_gravity": 1,
-          "dof_pos": 1,
+          "lin_vel": 0.0, // unused by the AMP observation layout
+          "ang_vel": 1.0,
+          "project_gravity": 1.0,
+          "dof_pos": 1.0,
           "dof_vel": 0.05
         },
-        "ClipObservations": 100
+        "ClipObservations": 18.0
       },
       "Postprocess": {
-        "clip_actions": 100,
+        "clip_actions": 18.0,
+        // action_scale = 0.25 * URDF_effort / Kp per joint (device order)
         "action_scale": [
-          0.5475464652,
-          0.5475464652,
-            0.5475464652,
-          0.3506614664,
-            0.3506614664,
-            0.4385773139,
-          0.5475464652,
-            0.5475464652,
-            0.4385773139,
-          0.3506614664,
-            0.3506614664,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-          0.4385773139,
-            0.4385773139,
-            0.4385773139,
-            0.4385773139,
-            0.4385773139,
-            0.4385773139,
-          0.0745008703,
-            0.0745008703,
-            0.0745008703,
-          0.0745008703
+          0.22, 0.3475, 0.22, 0.2316666666666667, 0.21875, 0.21875,
+          0.22, 0.3475, 0.22, 0.2316666666666667, 0.21875, 0.21875,
+          0.11, 0.21875, 0.21875,
+          0.15625, 0.15625, 0.15625, 0.15625, 0.15625, 0.03125, 0.03125,
+          0.15625, 0.15625, 0.15625, 0.15625, 0.15625, 0.03125, 0.03125
         ],
+        // URDF position limits in device order (deployment-side protection;
+        // training does not clip q_target)
         "joint_clip_upper": [
-          2.8798,
-            2.8798,
-            2.618,
-            2.9671,
-          0.5236,
-            0.52,
-          2.7576,
-            2.7576,
-            0.52,
-          2.8798,
-            2.8798,
-            2.6704,
-            2.6704,
-            0.5236,
-            0.5236,
-            2.2515,
-            1.5882,
-            0.2618,
-            0.2618,
-            2.618,
-            2.618,
-            2.0944,
-            2.0944,
-            1.97222,
-            1.97222,
-            1.61443,
-            1.61443,
-          1.61443,
-          1.61443
+          2.8798, 2.9671, 2.7576, 2.8798, 0.5236, 0.2618,
+          2.8798, 0.5236, 2.7576, 2.8798, 0.5236, 0.2618,
+          2.618, 0.52, 0.52,
+          2.6704, 2.2515, 2.618, 2.0944, 1.97222, 1.61443, 1.61443,
+          2.6704, 1.5882, 2.618, 2.0944, 1.97222, 1.61443, 1.61443
         ],
         "joint_clip_lower": [
-          -2.5307,
-            -2.5307,
-            -2.618,
-            -0.5236,
-            -2.9671,
-            -0.52,
-          -2.7576,
-            -2.7576,
-            -0.52,
-          -0.087267,
-            -0.087267,
-            -3.0892,
-            -3.0892,
-            -0.87267,
-            -0.87267,
-          -1.5882,
-            -2.2515,
-            -0.2618,
-            -0.2618,
-            -2.618,
-          -2.618,
-          -1.0472,
-            -1.0472,
-          -1.97222,
-            -1.97222,
-          -1.61443,
-          -1.61443,
-            -1.61443,
-          -1.61443
+          -2.5307, -0.5236, -2.7576, -0.087267, -0.87267, -0.2618,
+          -2.5307, -2.9671, -2.7576, -0.087267, -0.87267, -0.2618,
+          -2.618, -0.52, -0.52,
+          -3.0892, -1.5882, -2.618, -1.0472, -1.97222, -1.61443, -1.61443,
+          -3.0892, -2.2515, -2.618, -1.0472, -1.97222, -1.61443, -1.61443
         ]
       }
     },
@@ -432,14 +293,16 @@
           0.0,
           0.0
         ],
+      // AMP v153 training command ranges: vx [-0.3, 0.6], vy = 0 (fixed), yaw [-0.3, 0.3];
+      // deployment starts with a conservative yaw limit of +-0.2
       "UpperLimit": [
-        1.0,
-        0.3,
+        0.6,
+        0.0,
         0.2
       ],
       "LowerLimit": [
-        -0.5,
         -0.3,
+        0.0,
         -0.2
       ],
       "DiscreteCmdStep": [

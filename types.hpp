@@ -23,6 +23,7 @@
 #include "Workers/NN/BeyondMimicWorker.hpp"
 #include "Workers/NN/UnitreeRlLabVelocityInferenceWorker.hpp"
 #include "Workers/NN/UnitreeRlVersionInferenceWoker.hpp"
+#include "Workers/NN/HumanoidGymAmpInferenceWorker.hpp"
 #include "Workers/MITMotorControlWorker.hpp"
 
 #ifdef BUILD_SIMULATION
@@ -156,4 +157,7 @@ using ActionManagementWorkerType = z::ActionAndMotorPropertiesManagementWorker<S
 
 /******define actor net************/
 using BeyondMimicUnitreeInferWorkerType = z::BeyondMimicUnitreeInferenceWorker<SchedulerType, Net1Name, RealNumber, JOINT_NUMBER, DANCE_TRAJECTORY_LENGTH>;
-using UnitreeRlLabVelocityInferWorkerType = z::UnitreeRlVersionInferenceWorker<SchedulerType, WalkNetName, RealNumber, 8, JOINT_NUMBER>; // parkour version policy, stack 8 frames of proprioception history
+// HumanoidGym AMP v153 (actor projected-gravity) policy: 15 frames x 98 dims = 1470 -> 29.
+// Replaces the former parkour policy (UnitreeRlVersionInferenceWorker, 8 frames + depth) on the WalkNet1 channel,
+// so the original 9/8/p/r key flow and InferWalkTask plumbing are kept unchanged.
+using HumanoidGymAmpInferWorkerType = z::HumanoidGymAmpInferenceWorker<SchedulerType, WalkNetName, RealNumber, 15, JOINT_NUMBER>;

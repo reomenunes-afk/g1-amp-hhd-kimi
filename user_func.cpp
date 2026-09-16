@@ -204,8 +204,8 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
     d.SimDiagnosticsEnabled = d.AutoDebugEnabled || cfg_root.value("Diagnostics", nlohmann::json::object()).value("Enable", false);
 #endif
 
-    bool flip_depth_horizontal = false;
-    bool depth_gaussian_blur = true;
+    [[maybe_unused]] bool flip_depth_horizontal = false;
+    [[maybe_unused]] bool depth_gaussian_blur = true;
     if (cfg_workers.contains("WalkNet1") && cfg_workers["WalkNet1"].contains("Preprocess")) {
         const auto& preprocess_cfg = cfg_workers["WalkNet1"]["Preprocess"];
         flip_depth_horizontal = preprocess_cfg.value("FlipDepthHorizontal", false);
@@ -282,6 +282,12 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
 #endif
     });
 
+#ifdef BUILD_SIMULATION
+    // The AMP policy does not consume depth images. In simulation builds the depth camera
+    // worker and its task are disabled to save CPU; the real-robot camera chain below is
+    // compiled unchanged when BUILD_SIMULATION is off.
+    std::cout << "[Config] BUILD_SIMULATION: depth camera worker/task disabled (AMP policy needs no depth)" << std::endl;
+#else
 // 创建相机 Worker（和 AlterImuWorker 一样使用 SimpleCallbackWorker 模式）
 // std::cout << "[camera] CameraWorker created" << std::endl;
     // 创建相机 Worker（和 AlterImuWorker 一样使用 SimpleCallbackWorker 模式）
@@ -504,6 +510,7 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
                 std::cout << "[DepthDump] saved /tmp/realsense_policy_depth_18x32.pgm" << std::endl;
             }
         });
+#endif //BUILD_SIMULATION (camera worker)
 
     //创建主任务列表，并添加worker
     d.TaskScheduler->CreateTaskList("MainTask", 1, true);
@@ -515,6 +522,7 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
         });
 
     const double scheduler_dt = cfg_root["Scheduler"]["dt"].get<double>();
+#ifndef BUILD_SIMULATION
     const double camera_fps = d.CameraPtr ? static_cast<double>(d.CameraPtr->GetFps()) : 30.0;
     const size_t camera_task_div = std::max<size_t>(
         1, static_cast<size_t>(std::llround(1.0 / (scheduler_dt * camera_fps))));
@@ -523,6 +531,7 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
     d.TaskScheduler->CreateTaskList("CameraTask", camera_task_div);
     d.TaskScheduler->AddWorker("CameraTask", d.CameraWorker);
     d.TaskScheduler->EnableTaskList("CameraTask");
+#endif //BUILD_SIMULATION (camera task)
 
     //创建推理任务列表，并添加worker，设置推理任务频率
     d.DanceNetInferWorker = d.TaskScheduler->template CreateWorker<BeyondMimicUnitreeInferWorkerType>(cfg_workers["DanceNet1"], cfg_workers["DanceNet1"], JOINT_ID_MAP);
@@ -535,9 +544,11 @@ void ConfigFunc(const KernelBus& bus, UserData& d)
         });
 
     //创建走路的推理任务列表，并添加worker，设置推理任务频率
-    d.WalkNetInferWorker = d.TaskScheduler->template CreateWorker<UnitreeRlLabVelocityInferWorkerType>(cfg_workers["WalkNet1"], cfg_workers["MotorControl"]);
+    //AMP policy runs at 100Hz (training policy dt=0.01s): with 500Hz bus (dt=0.002s) the divider is 5.
+    //The legacy "PolicyFrequency" divider (10 -> 50Hz) is kept for the dance task only.
+    d.WalkNetInferWorker = d.TaskScheduler->template CreateWorker<HumanoidGymAmpInferWorkerType>(cfg_workers["WalkNet1"], cfg_workers["MotorControl"]);
     d.WalkCmdWorker = d.TaskScheduler->template CreateWorker<CmdWorkerType>(cfg_workers["WalkCmd"]);
-    d.TaskScheduler->CreateTaskList("InferWalkTask", cfg_root["Scheduler"]["InferTask"]["PolicyFrequency"]);
+    d.TaskScheduler->CreateTaskList("InferWalkTask", cfg_root["Scheduler"]["InferTask"]["AmpPolicyFrequency"]);
     d.TaskScheduler->AddWorkers("InferWalkTask",
         {
             d.WalkCmdWorker,
